@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Quarto - AI Hub</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; text-align: center; margin: 0; padding: 10px; }
+        h1 { color: #1a73e8; margin: 5px 0; font-size: 1.6rem; }
+        #status { font-size: 1.1rem; font-weight: bold; margin: 10px 0; color: #333; }
+        
+        /* Main Dashboard Layout */
+        .game-layout { display: flex; justify-content: center; align-items: flex-start; gap: 20px; flex-wrap: wrap; max-width: 1100px; margin: 0 auto; }
+        .panel { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); flex: 1; min-width: 300px; max-width: 450px; }
+
+        /* Quarto Board */
+        .quarto-board { display: inline-grid; grid-template-columns: repeat(4, 75px); grid-template-rows: repeat(4, 75px); gap: 8px; background-color: #333; padding: 12px; border-radius: 10px; margin: 10px 0; }
+        .quarto-cell { width: 75px; height: 75px; background-color: #eaeaea; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid #ccc; position: relative; }
+        .quarto-cell.selected-target { border: 3px dashed #1a73e8; background-color: #e8f0fe; }
+
+        /* Piece Visual Styling */
+        .piece-visual { display: flex; align-items: center; justify-content: center; position: relative; font-weight: bold; font-size: 0.7rem; color: #333; transition: transform 0.2s; }
+        .piece-visual.tall { width: 48px; height: 48px; }
+        .piece-visual.short { width: 32px; height: 32px; }
+        .piece-visual.dark { background-color: #553311; color: #fff; }
+        .piece-visual.light { background-color: #f0d9b5; border: 1px solid #999; }
+        .piece-visual.square { border-radius: 4px; }
+        .piece-visual.round { border-radius: 50%; }
+        .piece-visual.hollow::after { content: ''; position: absolute; width: 35%; height: 35%; background-color: inherit; border: 2px solid #888; border-radius: 50%; }
+        
+        .assigned-box { background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 12px; }
+        .piece-tray { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-height: 220px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin: 8px 0; }
+        .tray-item { width: 55px; height: 55px; border: 2px solid #ccc; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; background: #fff; }
+        .tray-item.selected { border-color: #1a73e8; background-color: #e8f0fe; transform: scale(1.05); }
+
+        /* Inspection Box for Placed Pieces */
+        .inspect-box { background: #e8f0fe; border: 1px solid #b8daff; padding: 8px; border-radius: 6px; margin-top: 10px; font-size: 0.85rem; color: #004085; min-height: 35px; display: flex; align-items: center; justify-content: center; }
+
+        /* Modal Dialog */
+        .modal { display: none; position: fixed; z-index: 10; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); min-width: 300px; }
+        button { padding: 8px 14px; font-size: 0.95rem; border-radius: 6px; border: none; background-color: #1a73e8; color: white; font-weight: bold; cursor: pointer; margin: 4px; }
+        button:hover { background-color: #1557b0; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+        .btn-confirm { background-color: #28a745; width: 100%; margin-top: 8px; }
+        .btn-confirm:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+    <h1>Quarto</h1>
+    <div id="status">Loading game state...</div>
+
+    <div class="game-layout">
+        <!-- Left Panel: Board & Inspection -->
+        <div class="panel">
+            <h3 style="margin-top:0; color:#333;">Game Board</h3>
+            <div id="boardArea"></div>
+            <div class="inspect-box" id="inspectBox">
+                💡 Click any placed piece on the board to inspect its properties.
+            </div>
+        </div>
+
+        <!-- Right Panel: Controls, Assigned Piece & Tray -->
+        <div class="panel">
+            <h3 style="margin-top:0; color:#333;">Your Actions</h3>
+            
+            <div class="assigned-box">
+                <div style="font-weight: bold; margin-bottom: 5px; color: #555; font-size:0.9rem;">Piece You Must Place:</div>
+                <div id="assignedPieceArea" style="display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 45px;">
+                    <span>None</span>
+                </div>
+            </div>
+
+            <div>
+                <div style="font-weight: bold; color: #555; font-size:0.9rem; text-align: left;">Pick piece to give AI:</div>
+                <div style="font-size: 0.8rem; color: #1a73e8; text-align: left; margin: 2px 0;">Selected: <span id="chosenPieceText" style="font-weight: bold;">None</span></div>
+                <div class="piece-tray" id="pieceTray"></div>
+            </div>
+
+            <button class="btn-confirm" onclick="submitQuartoTurn()">Confirm Move & Hand Piece to AI</button>
+            <div style="margin-top: 15px;">
+                <button class="btn-secondary" onclick="window.location.href='/'" style="width: 100%;">Back to Setup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result Modal -->
+    <div id="resultModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Game Over</h2>
+            <p id="modalMessage">Winner</p>
+            <button class="btn-secondary" onclick="closeModal()">View Board</button>
+            <button onclick="window.location.href='/'">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Script remains mostly the same, add inspection logic -->
+    <script>
+        let gameState = {};
+        let chosenPieceToGiveAI = null;
+        let selectedCellForQuarto = null;
+
+        function getPieceProps(p) {
+            if (p === null || p === undefined) return null;
+            return {
+                id: p,
+                tall: Boolean((p >> 3) & 1),
+                dark: Boolean((p >> 2) & 1),
+                square: Boolean((p >> 1) & 1),
+                solid: Boolean(p & 1),
+                text: `${(p >> 3) & 1 ? 'Tall' : 'Short'}, ${(p >> 2) & 1 ? 'Dark' : 'Light'}, ${(p >> 1) & 1 ? 'Square' : 'Round'}, ${p & 1 ? 'Solid' : 'Hollow'}`
+            };
+        }
+
+        function createPieceElement(pProps) {
+            if (!pProps) return document.createTextNode("None");
+            const div = document.createElement('div');
+            div.className = `piece-visual ${pProps.tall ? 'tall' : 'short'} ${pProps.dark ? 'dark' : 'light'} ${pProps.square ? 'square' : 'round'} ${pProps.solid ? 'solid' : 'hollow'}`;
+            div.innerText = `#${pProps.id}`;
+            return div;
+        }
+
+        async function fetchState() {
+            const res = await fetch('/get_state');
+            gameState = await res.json();
+            renderGame();
+        }
+
+        function closeModal() {
+            document.getElementById('resultModal').style.display = 'none';
+        }
+
+        function renderGame() {
+            const statusEl = document.getElementById('status');
+            const boardArea = document.getElementById('boardArea');
+            const assignedArea = document.getElementById('assignedPieceArea');
+
+            boardArea.innerHTML = '';
+            assignedArea.innerHTML = '';
+
+            statusEl.innerText = gameState.game_over ? "Game Over" : `Current Turn: ${gameState.turn === 'human' ? 'Your Turn' : 'AI Thinking...'}`;
+
+            // Render Assigned Piece
+            const currentP = getPieceProps(gameState.selected_piece);
+            if (currentP) {
+                assignedArea.appendChild(createPieceElement(currentP));
+                const textSpan = document.createElement('span');
+                textSpan.style.fontSize = "0.8rem";
+                textSpan.style.color = "#444";
+                textSpan.innerText = currentP.text;
+                assignedArea.appendChild(textSpan);
+            } else {
+                assignedArea.innerText = "None";
+            }
+
+            // Render Board with Click-to-Inspect
+            const boardEl = document.createElement('div');
+            boardEl.className = 'quarto-board';
+
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'quarto-cell';
+                    const val = gameState.board[r][c];
+
+                    if (val !== null) {
+                        const pProps = getPieceProps(val);
+                        cell.appendChild(createPieceElement(pProps));
+                        // Click to inspect placed piece properties
+                        cell.onclick = () => {
+                            // document.getElementById('inspectBox').innerText = `🔍 Inspected Board [Row ${r+1}, Col ${c+1}]: Piece #${pProps.id} (${pProps.text})`;
+                            document.getElementById('inspectBox').innerText = `🔍 Inspected Board [Row ${r+1}, Col ${c+1}]: Piece (${pProps.text})`;
+                        };
+                    } else {
+                        if (selectedCellForQuarto && selectedCellForQuarto.r === r && selectedCellForQuarto.c === c) {
+                            cell.classList.add('selected-target');
+                        }
+                        if (!gameState.game_over && gameState.turn === 'human' && gameState.selected_piece !== null) {
+                            cell.onclick = () => {
+                                selectedCellForQuarto = { r, c };
+                                document.getElementById('inspectBox').innerText = `🎯 Selected target cell [Row ${r+1}, Col ${c+1}] for placement.`;
+                                renderGame();
+                            };
+                        }
+                    }
+                    boardEl.appendChild(cell);
+                }
+            }
+            boardArea.appendChild(boardEl);
+            renderQuartoTray();
+
+            if (gameState.game_over) {
+                let msg = "It's a Tie!";
+                if (gameState.winner === "Human") msg = "You Won! 🎉";
+                else if (gameState.winner === "AI") msg = "AI Won! 🤖";
+                document.getElementById('modalTitle').innerText = "Game Over";
+                document.getElementById('modalMessage').innerText = msg;
+                document.getElementById('resultModal').style.display = 'flex';
+            }
+        }
+
+        function renderQuartoTray() {
+            const tray = document.getElementById('pieceTray');
+            tray.innerHTML = '';
+
+            const chosenTextEl = document.getElementById('chosenPieceText');
+            if (chosenPieceToGiveAI !== null) {
+                const props = getPieceProps(chosenPieceToGiveAI);
+                chosenTextEl.innerText = `#${props.id} (${props.text})`;
+            } else {
+                chosenTextEl.innerText = "None";
+            }
+
+            gameState.available_pieces.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'tray-item';
+                if (chosenPieceToGiveAI === p) item.classList.add('selected');
+
+                const pProps = getPieceProps(p);
+                item.appendChild(createPieceElement(pProps));
+
+                if (!gameState.game_over) {
+                    item.onclick = () => {
+                        chosenPieceToGiveAI = p;
+                        renderQuartoTray();
+                    };
+                }
+                tray.appendChild(item);
+            });
+        }
+
+        async function submitQuartoTurn() {
+            if (gameState.game_over) return;
+            if (!selectedCellForQuarto || chosenPieceToGiveAI === null) {
+                alert("Please select an empty cell ON THE BOARD and a piece from THE TRAY to hand over to the AI!");
+                return;
+            }
+
+            const res = await fetch('/make_move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    row: selectedCellForQuarto.r,
+                    col: selectedCellForQuarto.c,
+                    next_piece: chosenPieceToGiveAI
+                })
+            });
+            const data = await res.json();
+            if (data.error) {
+                alert(data.error);
+            } else {
+                gameState = data;
+                selectedCellForQuarto = null;
+                chosenPieceToGiveAI = null;
+                document.getElementById('inspectBox').innerText = "💡 Click any placed piece on the board to inspect its properties.";
+                renderGame();
+            }
+        }
+
+        fetchState();
+    </script>
+</body>
+</html>
